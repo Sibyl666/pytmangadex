@@ -22,7 +22,7 @@ class Chapter:
         self.manga_id = data["manga_id"]
         self.page_array = data["page_array"]
 
-    def download_chapter(self, path = ""):
+    def download_chapter(self, path=""):
         count = 0
 
         for page in self.page_array:
