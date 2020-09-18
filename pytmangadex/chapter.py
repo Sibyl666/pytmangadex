@@ -1,5 +1,6 @@
 import requests
 import asyncio
+import os
 from aiohttp import ClientSession
 from bs4 import BeautifulSoup
 
@@ -25,19 +26,19 @@ class Chapter:
         self.page_array = data["page_array"]
         self.count = 0
 
-    def download_chapter(self, path=""):
+    def download_chapter(self):
         count = 0
 
         for page in self.page_array:
             img_resp = requests.get(
                 f"https://mangadex.org/data/{self.hash}/{page}").content
 
-            with open(f"{path}/chapter_{count}.png", "wb") as img:
+            with open(f"{os.getcwd()}/chapter_{count}.png", "wb") as img:
                 img.write(img_resp)
 
             count += 1
 
-    async def download_file(self, page, path):
+    async def download_file(self, page):
         url = f"https://mangadex.org/data/{self.hash}/{page}"
 
         async with ClientSession() as session:
@@ -45,12 +46,12 @@ class Chapter:
                 content = await response.read()
 
                 self.count += 1
-                with open(f"{path}/chapter_{self.count}.png", "wb") as img:
+                with open(f"{os.getcwd()}/chapter_{self.count}.png", "wb") as img:
                     img.write(content)
 
-    async def async_download_chapter(self, path=""):
+    async def async_download_chapter(self):
         await asyncio.gather(
-            *[self.download_file(page, path) for page in self.page_array]
+            *[self.download_file(page) for page in self.page_array]
         )
 
     def get_comments(self):
