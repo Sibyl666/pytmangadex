@@ -71,7 +71,9 @@ class Chapter:
 
     #Downloads chapter to the given path
     #if empty will download to the cwd
-    def download_chapter(self, path=""):
+    def download_chapter(self):
+    
+    def async_download_chapter(self):
 
     #Returns json of comments on chapter
     def get_comments(self):
