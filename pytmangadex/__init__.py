@@ -6,7 +6,7 @@ from .chapter import Chapter
 
 class Mangadex():
     def __init__(self):
-        self.url = "https://mangadex.org/"
+        self.url = "https://mangadex.org"
         self.session = requests.Session()
         self.session.headers = {
             "authority": "mangadex.org",
