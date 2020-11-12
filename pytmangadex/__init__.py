@@ -18,7 +18,7 @@ class Mangadex():
         }
 
     def login(self, username, password):
-        login_url = f"{self.url}ajax/actions.ajax.php?function=login"
+        login_url = f"{self.url}/ajax/actions.ajax.php?function=login"
 
         login_data = {
             "login_username": username,
