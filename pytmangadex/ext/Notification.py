@@ -106,7 +106,5 @@ class Notification:
         return self._task
 
 
-def ChapterNotification():
-    def decerator(function):
-        return Notification(function)
-    return decerator
+def ChapterNotification(function):
+    return Notification(function)

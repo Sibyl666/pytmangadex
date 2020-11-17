@@ -52,12 +52,15 @@ class Mangadex():
         if os.path.exists("./pytmangadex/session.txt"):
             with open("./pytmangadex/session.txt", "r") as file:
                 self.session.cookies.update(json.loads(file.read()))
-            return
+            
+            resp = self.session.get("https://mangadex.org/follows")
+            if resp.status_code == 200:
+                return
                 
         try:
             is_success = self.session.post(login_url, data=login_data, headers=headers)
             if not is_success.cookies.get("mangadex_session"):
-                return "Failed To Login"
+                raise Exception("Failed to login")
             self.__session = self.session.cookies.get_dict()
             self.__writeSession()
 
