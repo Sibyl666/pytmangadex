@@ -1,4 +1,7 @@
 import requests
+import asyncio
+import os
+import json
 from bs4 import BeautifulSoup
 from .manga import Manga
 from .chapter import Chapter
@@ -16,6 +19,12 @@ class Mangadex():
             "pragma": "no-cache",
             'referer': 'https://mangadex.org/',
         }
+        self.__session = None
+
+    def __writeSession(self):
+        if not self.__session is None:
+            with open("./pytmangadex/session.txt", "w", encoding="utf-8") as file:
+                file.write(str(self.__session).replace("\'", "\""))
 
     def login(self, username, password):
         login_url = f"{self.url}/ajax/actions.ajax.php?function=login"
@@ -40,11 +49,17 @@ class Mangadex():
             "x-requested-with": "XMLHttpRequest",
         }
 
+        if os.path.exists("./pytmangadex/session.txt"):
+            with open("./pytmangadex/session.txt", "r") as file:
+                self.session.cookies.update(json.loads(file.read()))
+            return
+                
         try:
             is_success = self.session.post(login_url, data=login_data, headers=headers)
             if not is_success.cookies.get("mangadex_session"):
                 return "Failed To Login"
-            print("logged in")
+            self.__session = self.session.cookies.get_dict()
+            self.__writeSession()
 
         except Exception as err:
             return err
@@ -66,8 +81,7 @@ class Mangadex():
                     except:
                         continue
                 data["manga"]["genres"] = value
-
-            if prop_name == "Theme":
+            elif prop_name == "Theme":
                 # themes
                 value = []
                 for theme in prop.contents[3]:
@@ -76,8 +90,7 @@ class Mangadex():
                     except:
                         continue
                 data["manga"][f"{prop_name}"] = value
-
-            if prop_name == "Stats":
+            elif prop_name == "Stats":
                 stat = prop.contents[3].ul.contents
                 value = {
                     "views": stat[1].text,
@@ -225,3 +238,7 @@ class Mangadex():
             count += 1
 
         return json_to_return
+
+    def runNotifications(self):
+        loop = asyncio.get_event_loop()
+        loop.run_forever()
