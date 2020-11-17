@@ -20,6 +20,25 @@ print(chapter.get_comments())
 print(chapter.download_chapter("manga/")) #download to the manga folder
 
 ```
+
+# Auto Notification
+```python
+from pytmangadex import Mangadex
+from pytmangadex.ext.Notification import ChapterNotification
+
+client = Mangadex()
+
+@ChapterNotification
+async def followNotification(chapter):
+    print(chapter["title"])
+
+client.login("username", "password")
+followNotification.add()
+client.runNotifications() # This should be last thing in the code 
+                          # If you use library like discord py only .add() function is enough so you don't need this
+```
+
+
 # API Functions
 ```python
 class Mangadex():
