@@ -7,23 +7,30 @@ from bs4 import BeautifulSoup
 
 class Chapter:
     __slots__ = (
-        "id", "session", "timestamp", "hash", "volume", "chapter", "title", "lang_name",
-        "lang_code", "manga_id", "page_array", "count"
+        "id", "session", "timestamp", "hash", "volume", "chapter", "title",
+        "languageCode", "mangaId", "uploader", "views", "status", "comments", "groups", "mangaTitle", "page_array", "count", "server"
     )
 
     def __init__(self, session, data):
         self.session = session
 
         self.id = data["id"]
-        self.timestamp = data["timestamp"]
-        self.hash = data["hash"]
-        self.volume = data["volume"]
-        self.chapter = data["chapter"]
-        self.title = data["title"]
-        self.lang_name = data["lang_name"]
-        self.lang_code = data["lang_code"]
-        self.manga_id = data["manga_id"]
-        self.page_array = data["page_array"]
+        self.hash = data["data"]["hash"]
+        self.mangaId = data["data"]["mangaId"]
+        self.mangaTitle = data["data"]["mangaTitle"]
+        self.volume = data["data"]["volume"]
+        self.chapter = data["data"]["chapter"]
+        self.title = data["data"]["title"]
+        self.languageCode = data["data"]["language"]
+        self.groups = data["data"]["groups"]
+        self.uploader = data["data"]["uploader"]
+        self.timestamp = data["data"]["timestamp"]
+        self.comments = data["data"]["comments"]
+        self.views = data["data"]["views"]
+        self.status = data["data"]["status"]
+        self.page_array = data["data"]["pages"]
+        self.server = data["data"]["server"]
+        
         self.count = 0
 
     def download_chapter(self):
@@ -38,7 +45,7 @@ class Chapter:
 
             count += 1
 
-    async def download_file(self, page):
+    async def __download_file(self, page):
         url = f"https://mangadex.org/data/{self.hash}/{page}"
 
         async with ClientSession() as session:
@@ -51,14 +58,14 @@ class Chapter:
 
     async def async_download_chapter(self):
         await asyncio.gather(
-            *[self.download_file(page) for page in self.page_array]
+            *[self.__download_file(page) for page in self.page_array]
         )
 
     def get_comments(self):
         json_to_return = {}
         response = self.session.get(
             f"https://mangadex.org/chapter/{self.id}/comments")
-        soup = BeautifulSoup(response.content, "lxml")
+        soup = BeautifulSoup(response.content, "html.parser")
 
         for comment in soup.find_all("tr", "post"):  # comments
             username = comment.td.div.a.text

@@ -2,6 +2,7 @@ import requests
 import asyncio
 import os
 import json
+from aiohttp import ClientSession
 from bs4 import BeautifulSoup
 from .manga import Manga
 from .chapter import Chapter
@@ -52,7 +53,8 @@ class Mangadex():
         if os.path.exists("./pytmangadex/session.txt"):
             with open("./pytmangadex/session.txt", "r") as file:
                 self.session.cookies.update(json.loads(file.read()))
-            
+                self.loginCookies = self.session.cookies
+
             resp = self.session.get("https://mangadex.org/follows")
             if resp.status_code == 200:
                 return
@@ -61,53 +63,44 @@ class Mangadex():
             is_success = self.session.post(login_url, data=login_data, headers=headers)
             if not is_success.cookies.get("mangadex_session"):
                 raise Exception("Failed to login")
+            self.loginCookies = self.session.cookies.get_dict()
             self.__session = self.session.cookies.get_dict()
             self.__writeSession()
 
         except Exception as err:
             return err
 
+    async def getManga(self, manga_id: int):
+        params = {
+            "include": "chapters"
+        }
+        async with ClientSession() as session:
+            async with session.get(f"https://mangadex.org/api/v2/manga/{manga_id}", params=params, cookies=self.loginCookies) as mangaResp:
+                if not mangaResp.status == 200:
+                    raise Exception(f"Can't get manga info. Status Code: {mangaResp.status}")
+                
+                mangaResp = json.loads(
+                    await mangaResp.text()
+                )
+                
+                if mangaResp:
+                    return Manga(manga_id, self.session, mangaResp)
+
     def get_manga(self, manga_id: int):
-        data = self.session.get(f"https://mangadex.org/api/?id={manga_id}&type=manga").json()
+        params = {
+            "include": "chapters"
+        }
+        mangaResp = requests.get(f"https://mangadex.org/api/v2/manga/{manga_id}", params=params)
+        if not mangaResp.status_code == 200:
+            raise Exception(f"Can't get manga info. Status Code: {mangaResp.status_code}")
+        mangaResp = mangaResp.json()
 
-        resp_web = self.session.get(f"https://mangadex.org/title/{manga_id}")
-        soup = BeautifulSoup(resp_web.content, "lxml")
-        for prop in soup.find_all(class_="row m-0 py-1 px-0 border-top"):
-            prop_name = prop.contents[1].text.strip().replace(":", "")
-            value = prop.contents[3].text.strip()
-
-            if prop_name == "Genre":
-                value = []
-                for genre in prop.contents[3]:
-                    try:
-                        value.append(genre.text)
-                    except:
-                        continue
-                data["manga"]["genres"] = value
-            elif prop_name == "Theme":
-                # themes
-                value = []
-                for theme in prop.contents[3]:
-                    try:
-                        value.append(theme.text)
-                    except:
-                        continue
-                data["manga"][f"{prop_name}"] = value
-            elif prop_name == "Stats":
-                stat = prop.contents[3].ul.contents
-                value = {
-                    "views": stat[1].text,
-                    "follows": stat[3].text,
-                    "total_chapters": stat[5].text
-                }
-                data["manga"][f"{prop_name}"] = value
-
-        if data:
-            return Manga(manga_id, self.session, data)
+        if mangaResp:
+            return Manga(manga_id, self.session, mangaResp)
 
     def get_chapter(self, chapter_id: int):
         data = self.session.get(
-            f"https://mangadex.org/api/?id={chapter_id}&server=null&saver=0&type=chapter").json()
+            f"https://mangadex.org/api/v2/chapter/{chapter_id}").json()
 
         if data:
             return Chapter(self.session, data)
@@ -118,7 +111,7 @@ class Mangadex():
         follow_url = f"{self.url}/follows"
         response = self.session.get(follow_url)
 
-        soup = BeautifulSoup(response.content, "lxml")
+        soup = BeautifulSoup(response.content, "html.parser")
         contents = soup.find_all(class_="row no-gutters")
 
         # GET TITLE
@@ -144,7 +137,7 @@ class Mangadex():
         json_to_return = {}
         count = 0
         response = self.session.get(self.url)
-        soup = BeautifulSoup(response.content, "lxml")
+        soup = BeautifulSoup(response.content, "html.parser")
         contents = soup.find(class_="row m-0")
 
         for manga_div in contents:
@@ -165,7 +158,7 @@ class Mangadex():
         json_to_return = {}
         count = 0
         response = self.session.get(self.url)
-        soup = BeautifulSoup(response.content, "lxml")
+        soup = BeautifulSoup(response.content, "html.parser")
         top_mangas = soup.find(id="top_follows")
         top_manga_content = top_mangas.ul
 
@@ -187,7 +180,7 @@ class Mangadex():
         json_to_return = {}
         count = 0
         response = self.session.get(self.url)
-        soup = BeautifulSoup(response.content, "lxml")
+        soup = BeautifulSoup(response.content, "html.parser")
 
         for forum in soup.find(id="forum_posts").ul:
             json_to_return[f"{count}"] = {
@@ -203,7 +196,7 @@ class Mangadex():
         json_to_return = {}
         count = 0
         response = self.session.get(self.url)
-        soup = BeautifulSoup(response.content, "lxml")
+        soup = BeautifulSoup(response.content, "html.parser")
 
         for forum in soup.find(id="manga_posts").ul:
             try:
@@ -223,7 +216,7 @@ class Mangadex():
         json_to_return = {}
         count = 0
         response = self.session.get(f"{self.url}/featured")
-        soup = BeautifulSoup(response.content, "lxml")
+        soup = BeautifulSoup(response.content, "html.parser")
 
         for title in soup.find_all("div", "manga-entry col-lg-6 border-bottom pl-0 my-1"):
             json_to_return[f"{count}"] = {
@@ -241,6 +234,21 @@ class Mangadex():
             count += 1
 
         return json_to_return
+
+    async def search(self, keywords: str, limit: int = 10) -> Manga:
+        params = {
+            "title": keywords
+        }
+        resp = self.session.get(f"{self.url}/search", params=params)
+        if not resp.status_code == 200:
+            raise Exception(f"Cant get results {resp.status_code}")
+
+        soup = BeautifulSoup(resp.content, "html.parser")
+        titles = soup.find_all(class_="ml-1 manga_title text-truncate")
+        manga_ids = [manga_id["href"].split("/")[2] for manga_id in titles]
+
+        for mangaId in manga_ids[:limit]:
+            yield await self.getManga(mangaId)
 
     def runNotifications(self):
         loop = asyncio.get_event_loop()

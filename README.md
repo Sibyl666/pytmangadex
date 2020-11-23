@@ -17,7 +17,7 @@ chapter = mangadex.get_chapter(966015)
 print(chapter.get_comments())
 >>> Long json thing
 
-print(chapter.download_chapter("manga/")) #download to the manga folder
+chapter.download_chapter("manga/") #download to the manga folder
 
 ```
 
@@ -29,7 +29,7 @@ from pytmangadex.ext.Notification import ChapterNotification
 client = Mangadex()
 
 @ChapterNotification
-async def followNotification(chapter):
+async def followNotification(chapter): # param chapter is Chapter object
     print(chapter["title"])
 
 client.login("username", "password")
@@ -47,6 +47,9 @@ class Mangadex():
     #Login first
     def login(self, username, password):
     
+    #Async version of get_manga
+    async def getManga(self, manda_id: int):
+
     #Returns you an manga object
     def get_manga(self, manga_id: int):
 
@@ -68,6 +71,12 @@ class Mangadex():
 
     def featured_titles(self):
 
+    #Search manga
+    async def search(self, keywords: str, limit: int = 10):
+
+    #For running ChapterNotification functions
+    def runNotifications(self):
+
 ```
 
 # Manga class
@@ -79,6 +88,9 @@ class Manga:
 
     #Returns covers manga had
     def covers(self):
+
+    #Get chapter tags with info description etc.
+    def getTags(self):
 ```
 
 # Chapter class
@@ -92,9 +104,36 @@ class Chapter:
     #if empty will download to the cwd
     def download_chapter(self):
     
+    #Async version of downloading chapter
     def async_download_chapter(self):
 
     #Returns json of comments on chapter
     def get_comments(self):
 
+```
+
+# Examples
+## Base
+```python
+from pytmangadex import Mangadex
+
+client = Mangadex()
+client.login("username", "password")
+
+async def main():
+    # other examples down there will come here
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+## How to Search
+```python
+async for manga in client.search("isekai", 10): # params: Search word, limit
+    print(manga.title) # Manga object
+```
+## Get tags of manga with info
+```python
+async for manga in client.search("isekai", 10): # params: Search word, limit
+    manga.getTags()
+    print(manga.title) # Manga object
 ```
