@@ -6,6 +6,7 @@ from aiohttp import ClientSession
 from bs4 import BeautifulSoup
 from .manga import Manga
 from .chapter import Chapter
+from .user import User
 
 
 class Mangadex():
@@ -21,13 +22,62 @@ class Mangadex():
             'referer': 'https://mangadex.org/',
         }
         self.__session = None
+        self.user = None
+
+    def __initializeClientuser(self):
+        resp = self.session.get("https://mangadex.org/api/v2/user/me", params= {"include": "chapters"})
+        if not resp.status_code == 200:
+            if resp.status_code == 404:
+                raise Exception(resp)
+            raise Exception(f"Can't connect to website. Status code: {resp.status_code}")
+        resp = resp.json()
+        self.user = User(resp["data"]["user"]["id"], self.session, resp["data"])
+        self.user.settings = self.__clientSettingsfunction
+        self.user.followed_mangas = self.__clientFollowedmanga
+        self.user.ratings = self.__clientUserratings
+        self.user.mangaData = self.__clientMangaData
+        
+    def __clientSettingsfunction(self):
+        resp = self.session.get(f"https://mangadex.org/api/v2/user/me/settings")
+        if not resp.status_code == 200:
+            if resp.status_code == 400:
+                raise Exception("No valid ID provided. make sure that you logged in.")
+            raise Exception(f"Can't get settings. Status code: {resp.status_code}")
+        return resp.json()["data"]
+
+    def __clientFollowedmanga(self):
+        resp = self.session.get(f"https://mangadex.org/api/v2/user/me/followed-manga")
+        if not resp.status_code == 200:
+            if resp.status_code == 400:
+                raise Exception("No valid ID provided. make sure that you logged in.")
+            raise Exception(f"Can't get followed manga(s). Status code: {resp.status_code}")
+        return resp.json()["data"]
+
+    def __clientUserratings(self):
+        resp = self.session.get(f"https://mangadex.org/api/v2/user/me/ratings")
+        if not resp.status_code == 200:
+            if resp.status_code == 400:
+                raise Exception("No valid ID provided. make sure that you logged in.")
+            raise Exception(f"Can't get ratings. Status code: {resp.status_code}")
+        return resp.json()["data"]
+
+    def __clientMangaData(self, manga_id: int) -> dict:
+        """
+            Get a user's personal data for any given manga.
+        """
+        resp = self.session.get(f"https://mangadex.org/api/v2/user/me/manga/{manga_id}")
+        if not resp.status_code == 200:
+            if resp.status_code == 400:
+                raise Exception("No valid ID provided. make sure that you logged in.")
+            raise Exception(f"Can't get manga data. Status code: {resp.status_code}")
+        return resp.json()["data"]
 
     def __writeSession(self):
         if not self.__session is None:
             with open("./pytmangadex/session.txt", "w", encoding="utf-8") as file:
                 file.write(str(self.__session).replace("\'", "\""))
 
-    def login(self, username, password):
+    def login(self, username: str, password: str) -> None:
         login_url = f"{self.url}/ajax/actions.ajax.php?function=login"
 
         login_data = {
@@ -54,11 +104,12 @@ class Mangadex():
             with open("./pytmangadex/session.txt", "r") as file:
                 self.session.cookies.update(json.loads(file.read()))
                 self.loginCookies = self.session.cookies
-
+            
+            self.__initializeClientuser()
             resp = self.session.get("https://mangadex.org/follows")
             if resp.status_code == 200:
                 return
-                
+
         try:
             is_success = self.session.post(login_url, data=login_data, headers=headers)
             if not is_success.cookies.get("mangadex_session"):
@@ -66,11 +117,11 @@ class Mangadex():
             self.loginCookies = self.session.cookies.get_dict()
             self.__session = self.session.cookies.get_dict()
             self.__writeSession()
-
+            self.__initializeClientuser()
         except Exception as err:
             return err
 
-    async def getManga(self, manga_id: int):
+    async def getManga(self, manga_id: int) -> Manga:
         params = {
             "include": "chapters"
         }
@@ -86,7 +137,7 @@ class Mangadex():
                 if mangaResp:
                     return Manga(manga_id, self.session, mangaResp)
 
-    def get_manga(self, manga_id: int):
+    def get_manga(self, manga_id: int) -> Manga:
         params = {
             "include": "chapters"
         }
@@ -98,42 +149,50 @@ class Mangadex():
         if mangaResp:
             return Manga(manga_id, self.session, mangaResp)
 
-    def get_chapter(self, chapter_id: int):
+    def get_chapter(self, chapter_id: int) -> Chapter:
         data = self.session.get(
             f"https://mangadex.org/api/v2/chapter/{chapter_id}").json()
 
         if data:
-            return Chapter(self.session, data)
+            return Chapter(self.session, data["data"])
 
-    def follow_last_updateds(self):
-        json_to_return = {}
-        count = 0
-        follow_url = f"{self.url}/follows"
-        response = self.session.get(follow_url)
+    def get_user(self, user_id: int=None, me=False) -> User:
+        if not me:
+            if user_id is None:
+                raise Exception("user_id is a required argument")
+            else:
+                try:
+                    int(user_id)
+                except:
+                    raise Exception("user_id must be int!")
+            requestUrl = f"{self.url}/api/v2/user/{user_id}"
+        else:
+            requestUrl = f"{self.url}/api/v2/user/me"
 
-        soup = BeautifulSoup(response.content, "html.parser")
-        contents = soup.find_all(class_="row no-gutters")
+        resp = self.session.get(requestUrl, params= {"include": "chapters"})
+        if not resp.status_code == 200:
+            if resp.status_code == 404:
+                raise Exception(resp)
+            raise Exception(f"Can't connect to website. Status code: {resp.status_code}")
+        resp = resp.json()
 
-        # GET TITLE
-        for manga_div in contents[1:]:
-            contents_in_div = manga_div.contents
-            try:
-                json_to_return[f"{count}"] = {
-                    "title": contents_in_div[1].a['title'],
-                    "chapter": contents_in_div[5].div.contents[3].a.string,
-                    "translator": contents_in_div[5].div.contents[13].a.string,
-                    "uploader": contents_in_div[5].div.contents[15].a.string,
-                    "age": contents_in_div[5].div.contents[7].text.strip(),
-                    "comments_href": contents_in_div[5].div.contents[5].a['href'],
-                    "comments_count": contents_in_div[5].div.contents[5].a.span['title']
-                }
-                count += 1
-            except:
-                pass
+        return User(resp["data"]["user"]["id"], self.session, resp["data"])
 
-        return json_to_return
+    def follow_last_updateds(self, limit=30) -> Chapter: # This will be deprecated. Instead use same function from user
+        print("This method will be deprecated. Instead use same function from user class")
 
-    def last_updates(self):
+        resp = self.session.get(f"{self.url}/api/v2/user/me/followed-updates")
+        if not resp.status_code == 200:
+            if resp.status_code == 404:
+                raise Exception(resp)
+            raise Exception(f"Can't connect to website. Status code: {resp.status_code}")
+        resp = resp.json()
+
+        return [
+            Chapter(self.session, chapter) for chapter in resp["data"]["chapters"][:limit]
+        ]
+
+    def last_updates(self) -> dict:
         json_to_return = {}
         count = 0
         response = self.session.get(self.url)
@@ -154,7 +213,7 @@ class Mangadex():
 
         return json_to_return
 
-    def top_manga(self):
+    def top_manga(self) -> dict:
         json_to_return = {}
         count = 0
         response = self.session.get(self.url)
@@ -176,7 +235,7 @@ class Mangadex():
 
         return json_to_return
 
-    def latest_posts_forums(self):
+    def latest_posts_forums(self) -> dict:
         json_to_return = {}
         count = 0
         response = self.session.get(self.url)
@@ -192,7 +251,7 @@ class Mangadex():
             count += 1
         return json_to_return
 
-    def latest_posts_manga(self):
+    def latest_posts_manga(self) -> dict:
         json_to_return = {}
         count = 0
         response = self.session.get(self.url)
@@ -212,7 +271,7 @@ class Mangadex():
             count += 1
         return json_to_return
 
-    def featured_titles(self):
+    def featured_titles(self) -> dict:
         json_to_return = {}
         count = 0
         response = self.session.get(f"{self.url}/featured")
