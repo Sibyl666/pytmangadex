@@ -7,6 +7,7 @@ from bs4 import BeautifulSoup
 from .manga import Manga
 from .chapter import Chapter
 from .user import User
+from .group import Group
 
 
 class Mangadex():
@@ -177,6 +178,19 @@ class Mangadex():
         resp = resp.json()
 
         return User(resp["data"]["user"]["id"], self.session, resp["data"])
+
+    def get_group(self, group_id: int) -> Group:
+        params = {
+            "include": "chapters"
+        }
+        resp = self.session.get(f"https://mangadex.org/api/v2/group/{group_id}", params=params)
+        if not resp.status_code == 200:
+            if resp.status_code == 404:
+                raise Exception(resp)
+            raise Exception(f"Can't connect to website. Status code: {resp.status_code}")
+        resp = resp.json()
+
+        return Group(self.session, resp["data"])
 
     def follow_last_updateds(self, limit=30) -> Chapter: # This will be deprecated. Instead use same function from user
         print("This method will be deprecated. Instead use same function from user class")
