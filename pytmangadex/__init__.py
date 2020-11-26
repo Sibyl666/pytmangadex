@@ -75,7 +75,7 @@ class Mangadex():
 
     def __writeSession(self):
         if not self.__session is None:
-            with open("./pytmangadex/session.txt", "w", encoding="utf-8") as file:
+            with open("./session.txt", "w", encoding="utf-8") as file:
                 file.write(str(self.__session).replace("\'", "\""))
 
     def login(self, username: str, password: str) -> None:
@@ -101,8 +101,8 @@ class Mangadex():
             "x-requested-with": "XMLHttpRequest",
         }
 
-        if os.path.exists("./pytmangadex/session.txt"):
-            with open("./pytmangadex/session.txt", "r") as file:
+        if os.path.exists("./session.txt"):
+            with open("./session.txt", "r") as file:
                 self.session.cookies.update(json.loads(file.read()))
                 self.loginCookies = self.session.cookies
             
