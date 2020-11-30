@@ -308,7 +308,11 @@ class Mangadex():
 
         return json_to_return
 
-    async def search(self, keywords: str, limit: int = 10) -> Manga:
+    def __chunks(self, lst, n):
+        for i in range(0, len(lst), n):
+            yield lst[i:i + n]
+
+    async def search(self, keywords: str) -> Manga:
         params = {
             "title": keywords
         }
@@ -320,8 +324,17 @@ class Mangadex():
         titles = soup.find_all(class_="ml-1 manga_title text-truncate")
         manga_ids = [manga_id["href"].split("/")[2] for manga_id in titles]
 
-        for mangaId in manga_ids[:limit]:
-            yield await self.getManga(mangaId)
+        loop = asyncio.get_event_loop()
+        for mangaIdChunks in self.__chunks(manga_ids, 6):
+            readyTasks = []
+            for mangaId in mangaIdChunks:
+                readyTasks.append(
+                    loop.create_task(self.getManga(mangaId))
+                )
+            for mangaObject in readyTasks:
+                yield await mangaObject
+            await asyncio.sleep(3)
+
 
     def runNotifications(self):
         loop = asyncio.get_event_loop()
