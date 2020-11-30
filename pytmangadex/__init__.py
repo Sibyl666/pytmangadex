@@ -312,28 +312,38 @@ class Mangadex():
         for i in range(0, len(lst), n):
             yield lst[i:i + n]
 
-    async def search(self, keywords: str) -> Manga:
-        params = {
-            "title": keywords
-        }
-        resp = self.session.get(f"{self.url}/search", params=params)
-        if not resp.status_code == 200:
-            raise Exception(f"Cant get results {resp.status_code}")
+    async def search(self, keywords: str, makeXRequests: int = 10) -> Manga:
+        manga_ids = []
+        for pageCount in range(100):
+            params = {
+                "title": keywords,
+                "p": pageCount
+            }
+            resp = self.session.get(f"{self.url}/search", params=params)
+            if not resp.status_code == 200:
+                raise Exception(f"Cant get results {resp.status_code}")
 
-        soup = BeautifulSoup(resp.content, "html.parser")
-        titles = soup.find_all(class_="ml-1 manga_title text-truncate")
-        manga_ids = [manga_id["href"].split("/")[2] for manga_id in titles]
+            soup = BeautifulSoup(resp.content, "html.parser")
+            titles = soup.find_all(class_="ml-1 manga_title text-truncate")
 
-        loop = asyncio.get_event_loop()
-        for mangaIdChunks in self.__chunks(manga_ids, 6):
-            readyTasks = []
-            for mangaId in mangaIdChunks:
-                readyTasks.append(
-                    loop.create_task(self.getManga(mangaId))
-                )
-            for mangaObject in readyTasks:
-                yield await mangaObject
-            await asyncio.sleep(3)
+            if len(titles) < 1:
+                print("end of results")
+                break # End of the results.
+
+            for mangaId in titles:
+                mangaIdint = mangaId["href"].split("/")[2]
+                try:
+                    manga_ids.append(int(mangaIdint))
+                except:
+                    continue
+
+        for mangaIdChunks in self.__chunks(manga_ids, makeXRequests):
+            getMangaCoroutineList = [
+                self.getManga(mangaId) for mangaId in mangaIdChunks
+            ]
+            for coro in asyncio.as_completed(getMangaCoroutineList):
+                yield await coro
+            await asyncio.sleep(0.5)
 
 
     def runNotifications(self):
