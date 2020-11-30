@@ -1,6 +1,11 @@
 # Mangadexpy
 an library to scrape data from mangadex.org
 
+## Basic installation
+```python
+pip install -U pytmangadex
+```
+
 # basic usage
 
 ```python
