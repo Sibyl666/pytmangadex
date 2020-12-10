@@ -1,3 +1,4 @@
+from http import cookies
 import requests
 import asyncio
 import os
@@ -17,7 +18,7 @@ class Mangadex():
         self.session.headers = {
             "authority": "mangadex.org",
             'cache-control': 'no-cache',
-            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/84.0.4147.89 Safari/537.36',
+            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36',
             'accept-language': 'en-US,en;q=0.9,tr-TR;q=0.8,tr;q=0.7',
             "pragma": "no-cache",
             'referer': 'https://mangadex.org/',
@@ -78,7 +79,7 @@ class Mangadex():
             with open("./session.txt", "w", encoding="utf-8") as file:
                 file.write(str(self.__session).replace("\'", "\""))
 
-    def login(self, username: str, password: str) -> None:
+    def login(self, username: str, password: str, newLogin=False) -> None:
         login_url = f"{self.url}/ajax/actions.ajax.php?function=login"
 
         login_data = {
@@ -101,7 +102,18 @@ class Mangadex():
             "x-requested-with": "XMLHttpRequest",
         }
 
-        if os.path.exists("./session.txt"):
+        if newLogin:
+            try:
+                is_success = self.session.post(login_url, data=login_data, headers=headers)
+                if not is_success.cookies.get("mangadex_session"):
+                    raise Exception("Failed to login")
+                self.loginCookies = self.session.cookies.get_dict()
+                self.__session = self.session.cookies.get_dict()
+                self.__writeSession()
+                self.__initializeClientuser()
+            except Exception as err:
+                return err
+        elif os.path.exists("./session.txt"):
             with open("./session.txt", "r") as file:
                 self.session.cookies.update(json.loads(file.read()))
                 self.loginCookies = self.session.cookies
@@ -110,17 +122,18 @@ class Mangadex():
             resp = self.session.get("https://mangadex.org/follows")
             if resp.status_code == 200:
                 return
+        else:
+            try:
+                is_success = self.session.post(login_url, data=login_data, headers=headers)
+                if not is_success.cookies.get("mangadex_session"):
+                    raise Exception("Failed to login")
+                self.loginCookies = self.session.cookies.get_dict()
+                self.__session = self.session.cookies.get_dict()
+                self.__writeSession()
+                self.__initializeClientuser()
+            except Exception as err:
+                return err
 
-        try:
-            is_success = self.session.post(login_url, data=login_data, headers=headers)
-            if not is_success.cookies.get("mangadex_session"):
-                raise Exception("Failed to login")
-            self.loginCookies = self.session.cookies.get_dict()
-            self.__session = self.session.cookies.get_dict()
-            self.__writeSession()
-            self.__initializeClientuser()
-        except Exception as err:
-            return err
 
     async def getManga(self, manga_id: int) -> Manga:
         params = {
@@ -312,22 +325,26 @@ class Mangadex():
         for i in range(0, len(lst), n):
             yield lst[i:i + n]
 
+    async def getPage(self, params):
+        async with ClientSession() as session:
+            async with session.get(f"https://mangadex.org/search", params=params, cookies=self.loginCookies, headers=self.session.headers) as resp:
+                if not resp.status == 200:
+                    raise Exception(f"Can't get results {resp.status}")
+                return await resp.text()
+
     async def search(self, keywords: str, makeXRequests: int = 10) -> Manga:
         manga_ids = []
-        for pageCount in range(100):
+        for pageCount in range(1, 100):
             params = {
                 "title": keywords,
                 "p": pageCount
             }
-            resp = self.session.get(f"{self.url}/search", params=params)
-            if not resp.status_code == 200:
-                raise Exception(f"Cant get results {resp.status_code}")
+            resp = await self.getPage(params)
 
-            soup = BeautifulSoup(resp.content, "html.parser")
+            soup = BeautifulSoup(resp, "html.parser")
             titles = soup.find_all(class_="ml-1 manga_title text-truncate")
 
             if len(titles) < 1:
-                print("end of results")
                 break # End of the results.
 
             for mangaId in titles:
@@ -337,13 +354,13 @@ class Mangadex():
                 except:
                     continue
 
-        for mangaIdChunks in self.__chunks(manga_ids, makeXRequests):
-            getMangaCoroutineList = [
-                self.getManga(mangaId) for mangaId in mangaIdChunks
-            ]
-            for coro in asyncio.as_completed(getMangaCoroutineList):
-                yield await coro
-            await asyncio.sleep(0.5)
+            for mangaIdChunks in self.__chunks(manga_ids, makeXRequests):
+                getMangaCoroutineList = [
+                    self.getManga(mangaId) for mangaId in mangaIdChunks
+                ]
+                for coro in asyncio.as_completed(getMangaCoroutineList):
+                    yield await coro
+                await asyncio.sleep(0.5)
 
 
     def runNotifications(self):
