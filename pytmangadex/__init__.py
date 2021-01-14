@@ -1,4 +1,5 @@
 from http import cookies
+from typing import ByteString
 import requests
 import asyncio
 import os
@@ -9,6 +10,16 @@ from .manga import Manga
 from .chapter import Chapter
 from .user import User
 from .group import Group
+
+
+def deleteSelfFromDict(dictParams: dict):
+    if "self" in dictParams.keys():
+        del dictParams["self"]
+
+    if isinstance(dictParams, dict):
+        return dict(dictParams)
+
+    return dictParams
 
 
 class Mangadex():
@@ -38,7 +49,23 @@ class Mangadex():
         self.user.followed_mangas = self.__clientFollowedmanga
         self.user.ratings = self.__clientUserratings
         self.user.mangaData = self.__clientMangaData
+        self.user.followed_updates = self.__clientFollowedUpdates
         
+    def __clientFollowedUpdates(self, p: int = 1, type: int = 0, hentai: int = 0, delayed: bool = False):
+        """
+            "p": "(Optional) The current page of the paginated results. Integer, default 1.", \n
+            "type": "(Optional) Filter the results by the follow type ID (i.e. 1 = Reading, 2 = Completed etc). Use 0 to remove filtering. Integer, default 0.",\n
+            "hentai": "(Optional) Filter results based on whether the titles are marked as hentai. 0 = Hide H, 1 = Show all, 2 = Show H only. Integer, default 0.",\n
+            "delayed": "(Optional) Include delayed chapters in the results. Boolean, default false."
+        """
+        
+        resp = self.session.get("https://mangadex.org/api/v2/user/me/followed-updates", params=deleteSelfFromDict(locals()))
+        if not resp.status_code == 200:
+            if resp.status_code == 400:
+                raise Exception("No valid ID provided. make sure that you logged in.")
+            raise Exception(f"Can't get settings. Status code: {resp.status_code}")
+        return resp.json()["data"]
+
     def __clientSettingsfunction(self):
         resp = self.session.get(f"https://mangadex.org/api/v2/user/me/settings")
         if not resp.status_code == 200:
@@ -134,7 +161,6 @@ class Mangadex():
             except Exception as err:
                 return err
 
-
     async def getManga(self, manga_id: int) -> Manga:
         params = {
             "include": "chapters"
@@ -163,9 +189,9 @@ class Mangadex():
         if mangaResp:
             return Manga(manga_id, self.session, mangaResp)
 
-    def get_chapter(self, chapter_id: int) -> Chapter:
+    def get_chapter(self, chapter_id: int, server: str = "na", saver: bool = False, mark_read: bool = True) -> Chapter:
         data = self.session.get(
-            f"https://mangadex.org/api/v2/chapter/{chapter_id}").json()
+            f"https://mangadex.org/api/v2/chapter/{chapter_id}", params=deleteSelfFromDict(locals())).json()
 
         if data:
             return Chapter(self.session, data["data"])
@@ -204,20 +230,6 @@ class Mangadex():
         resp = resp.json()
 
         return Group(self.session, resp["data"])
-
-    def follow_last_updateds(self, limit=30) -> Chapter: # This will be deprecated. Instead use same function from user
-        print("This method will be deprecated. Instead use same function from user class")
-
-        resp = self.session.get(f"{self.url}/api/v2/user/me/followed-updates")
-        if not resp.status_code == 200:
-            if resp.status_code == 404:
-                raise Exception(resp)
-            raise Exception(f"Can't connect to website. Status code: {resp.status_code}")
-        resp = resp.json()
-
-        return [
-            Chapter(self.session, chapter) for chapter in resp["data"]["chapters"][:limit]
-        ]
 
     def last_updates(self) -> dict:
         json_to_return = {}
@@ -361,7 +373,6 @@ class Mangadex():
                 for coro in asyncio.as_completed(getMangaCoroutineList):
                     yield await coro
                 await asyncio.sleep(0.5)
-
 
     def runNotifications(self):
         loop = asyncio.get_event_loop()

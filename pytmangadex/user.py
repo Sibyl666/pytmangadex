@@ -6,7 +6,7 @@ class User:
     __slots__ = (
         "user_id", "session", "data", "username", "levelId", "joined", "lastSeen", "website",
         "biography", "views", "uploads", "premium", "mdAtHome", "avatar", "chapters", "settings",
-        "followed_mangas", "ratings", "mangaData"
+        "followed_mangas", "ratings", "mangaData", "followed_updates"
     )
 
     def __init__(self, user_id, session, data):
@@ -28,6 +28,7 @@ class User:
 
         self.settings = None
         self.followed_mangas = None
+        self.followed_updates = None
         self.ratings = None
         self.mangaData = None
 
