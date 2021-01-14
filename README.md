@@ -47,9 +47,11 @@ client.runNotifications() # This should be last thing in the code
 # API Functions
 ### Attribute List, (same with user object but has extra methods)
 user is the user object of account that logged in. \
-user.settings \
-user.followed_mangas \
-user.ratings
+user.settings \ # Returns settings
+user.followed_mangas \ # Returns list of followed mangas
+user.ratings \ # Returns user's manga ratings.
+user.mangaData \ # Returns user's personal data for any given manga.
+user.followed_updateds # Returns latest uploaded chapters for the manga that the user has followed
 ```python
 user
 ```
@@ -71,9 +73,6 @@ class Mangadex():
 
     #Returns user object
     def get_user(self, user_id: int=None, me=False) -> User:
-
-    #Returns last updated chapters of following manga's
-    def follow_last_updateds(self) -> Chapter:
 
     #Returns all last updates manga's
     def last_updates(self) -> dict:
